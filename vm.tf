@@ -3,13 +3,12 @@ resource "azurerm_network_interface" "nic" {
   name                = "${each.key}-nic"
   location            = data.azurerm_resource_group.rg-nw.location
   resource_group_name = data.azurerm_resource_group.rg-nw.name
-
+  tags = local.common_tags
   ip_configuration {
     name                          = "internal"
     subnet_id                     = data.azurerm_subnet.appsubnet.id
     private_ip_address_allocation = "Dynamic"
   }
-
   lifecycle {
     ignore_changes = [
       # Ignore changes to tags, e.g. because a management agent
@@ -28,6 +27,7 @@ resource "azurerm_windows_virtual_machine" "vm" {
   size                = "Standard_B2s"
   admin_username      = "adminuser"
   admin_password      = "P@$$w0rd1234!"
+  tags                = local.common_tags
   network_interface_ids = [
     azurerm_network_interface.nic[each.key].id,
   ]
@@ -37,11 +37,12 @@ resource "azurerm_windows_virtual_machine" "vm" {
     caching              = "ReadWrite"
     storage_account_type = "StandardSSD_LRS"
  #   disk_encryption_set_id = "/subscriptions/7f60296c-ffff-46d1-b231-c71f26606fd8/resourceGroups/network-rg/providers/Microsoft.Compute/diskEncryptionSets/vm-encryption"
-     disk_encryption_set_id = data.azurerm_disk_encryption_set.disk-encrypt.id
+     #disk_encryption_set_id = data.azurerm_disk_encryption_set.disk-encrypt.id
   }
 
   boot_diagnostics {
     storage_account_uri = "https://bootdiag54.blob.core.windows.net/"
+    #storage_account_uri = data.azurerm_storage_account.diagstorage.primary_blob_endpoint
   }
 
   source_image_reference {
@@ -75,7 +76,8 @@ resource "azurerm_managed_disk" "disk" {
   storage_account_type = "Standard_LRS"
   create_option        = "Empty"
   disk_size_gb         = 10
-  disk_encryption_set_id = data.azurerm_disk_encryption_set.disk-encrypt.id
+  tags = local.common_tags
+ # disk_encryption_set_id = data.azurerm_disk_encryption_set.disk-encrypt.id
   depends_on = [
     azurerm_windows_virtual_machine.vm
   ]
@@ -98,4 +100,9 @@ resource "azurerm_virtual_machine_data_disk_attachment" "disk_attach" {
     azurerm_managed_disk.disk
   ]
  
+}
+
+output "appvm_private_ip_address_map" {
+  description = "App  Virtual Machine Private IP"
+  value = {for vm in azurerm_windows_virtual_machine.vm: vm.name => vm.private_ip_address }
 }
